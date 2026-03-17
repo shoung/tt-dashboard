@@ -3,34 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TT Office - Phaser Game</title>
+  <title>TT Office - Agent Town</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0f0f1a; overflow: hidden; }
-    #game-container { width: 100vw; height: 100vh; }
+    * { margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0f0f1a; }
+    #game-container { width: 100%; height: 100%; }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
   <script>
-    // Game configuration
+    // ========== 配置 ==========
     const AGENT_TOWN_BASE = "https://raw.githubusercontent.com/geezerrrr/agent-town/main/public";
     const TT_SPRITE_KEY = "character_02";
     const SHEET_COLUMNS = 56;
     const FRAME_WIDTH = 48;
     const FRAME_HEIGHT = 96;
     const MOVE_SPEED = 160;
-
-    // Constants
+    
+    // ========== 常量 ==========
     const BODY_WIDTH = 28;
     const BODY_HEIGHT = 20;
     const BODY_OFFSET_X = 10;
     const BODY_OFFSET_Y = 74;
-
-    const directions = ["right", "up", "left", "down"];
+    const WANDER_MIN_DELAY = 3000;
+    const WANDER_MAX_DELAY = 8000;
+    const TASK_BUBBLE_MS = 4000;
+    const TASK_RESULT_HOLD_MS = 2000;
+    
+    const DIRECTIONS = ["right", "up", "left", "down"];
     const FRAMES_PER_DIR = 6;
-
+    
+    // ========== 場景 ==========
     class OfficeScene extends Phaser.Scene {
       constructor() {
         super({ key: "OfficeScene" });
@@ -38,7 +43,8 @@
       }
 
       preload() {
-        this.load.tilemapTiledJSON("office", "/maps/office2.json");
+        // 地圖
+        this.load.tilemapTiledJSON("office", AGENT_TOWN_BASE + "/maps/office2.json");
         
         this.load.once("filecomplete-tilemapJSON-office", () => {
           const cached = this.cache.tilemap.get("office");
@@ -49,6 +55,7 @@
           }
         });
 
+        // 角色精靈圖
         this.load.spritesheet(
           TT_SPRITE_KEY,
           AGENT_TOWN_BASE + "/characters/Premade_Character_48x48_02.png",
@@ -70,6 +77,7 @@
           return;
         }
 
+        // 圖層
         map.createLayer("floor", allTilesets);
         map.createLayer("walls", allTilesets);
         map.createLayer("ground", allTilesets);
@@ -81,16 +89,30 @@
         const overheadLayer = map.createLayer("overhead", allTilesets);
         if (overheadLayer) overheadLayer.setDepth(10);
 
-        // Create TT character
+        // 創建 TT
         this.tt = this.createWorker(this, 350, 320, TT_SPRITE_KEY);
 
-        // Camera
+        // 攝影機
         this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
         this.cameras.main.startFollow(this.tt.sprite, true, 0.08, 0.08);
         this.cameras.main.setZoom(1.2);
 
-        // Expose for external control
+        // 暴露到全域
         window.ttWorker = this.tt;
+        
+        // 監聽來自父框架的消息
+        window.addEventListener('message', (event) => {
+          if (event.data.type === 'setStatus') {
+            this.tt.setStatus(event.data.status);
+          } else if (event.data.type === 'assignTask') {
+            this.tt.assignTask(event.data.id, event.data.message);
+          } else if (event.data.type === 'completeTask') {
+            this.tt.completeTask();
+          }
+        });
+        
+        // 告訴父框架準備好了
+        window.parent.postMessage({ type: 'gameReady' }, '*');
       }
 
       update() {
@@ -100,7 +122,6 @@
       }
 
       createWorker(scene, x, y, spriteKey) {
-        // Create animations
         this.ensureAnims(scene, spriteKey);
 
         const sprite = scene.physics.add.sprite(x, y, spriteKey, 0);
@@ -114,7 +135,7 @@
 
         sprite.anims.play(spriteKey + ":idle-down");
 
-        // Name tag
+        // 名字標籤
         const nameTag = scene.add.text(x, y + FRAME_HEIGHT/2 + 2, "TT", {
           fontFamily: '"Press Start 2P", monospace',
           fontSize: "8px",
@@ -123,10 +144,10 @@
           padding: { x: 4, y: 2 }
         }).setOrigin(0.5, 0).setDepth(20);
 
-        // Status dot
+        // 狀態點
         const statusDot = scene.add.graphics().setDepth(20);
 
-        // Bubble
+        // 氣泡
         const bubbleBg = scene.add.graphics();
         const bubbleText = scene.add.text(0, 0, "", {
           fontFamily: '"Press Start 2P", monospace',
@@ -172,16 +193,16 @@
           
           assignTask(id, message) {
             this.setStatus("working");
-            this.showBubble("📋 " + message, 4000);
+            this.showBubble("📋 " + message, TASK_BUBBLE_MS);
           },
           
           completeTask() {
             this.setStatus("done");
-            scene.time.delayedCall(2000, () => this.setStatus("idle"));
+            scene.time.delayedCall(TASK_RESULT_HOLD_MS, () => this.setStatus("idle"));
           },
           
           update() {
-            // Movement
+            // 移動
             if (this.moveTarget) {
               const dx = this.moveTarget.x - this.sprite.x;
               const dy = this.moveTarget.y - this.sprite.y;
@@ -204,7 +225,7 @@
               this.sprite.anims.play(this.spriteKey + ":walk-" + this.facing);
             }
             
-            // Update UI positions
+            // 更新 UI 位置
             nameTag.setPosition(this.sprite.x, this.sprite.y + FRAME_HEIGHT/2 + 2);
             this.updateStatusDot();
             if (bubble.visible) {
@@ -222,7 +243,7 @@
         for (const prefix of ["idle", "walk"]) {
           const row = prefix === "idle" ? 1 : 2;
           const frameRate = prefix === "idle" ? 8 : 10;
-          directions.forEach((dir, i) => {
+          DIRECTIONS.forEach((dir, i) => {
             const frames = [];
             for (let f = 0; f < FRAMES_PER_DIR; f++) {
               frames.push({ key: spriteKey, frame: row * SHEET_COLUMNS + i * FRAMES_PER_DIR + f });
@@ -236,6 +257,7 @@
       }
     }
 
+    // ========== 啟動遊戲 ==========
     const config = {
       type: Phaser.AUTO,
       parent: "game-container",
