@@ -1,12 +1,107 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Head from "next/head";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    
+    // 初始化日曆
+    const initCalendar = () => {
+      const tasks = [
+        { id: 'backup', title: '📦 自動備份', days: [0,1,2,3,4,5,6], time: '03:00', color: '#8b5cf6', desc: '每日備份到 GitHub' },
+        { id: 'health', title: '🏥 網站健康檢查', days: [0,1,2,3,4,5,6], time: '09:00', color: '#22c55e', desc: '檢查網站狀態' },
+        { id: 'gameart', title: '🎨 遊戲美術新聞', days: [0,1,2,3,4,5,6], time: '23:00', color: '#f59e0b', desc: '翻譯發布新聞' },
+        { id: 'youtube', title: '📺 YouTube 檢查', days: [1], time: '10:00', color: '#ef4444', desc: '檢查新影片' },
+        { id: 'earnings', title: '📈 美股財報', days: [5], time: '14:00', color: '#3b82f6', desc: '檢查財報' },
+      ];
+
+      const generateEvents = () => {
+        const events = [];
+        const now = new Date();
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 14);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dayOfWeek = d.getDay();
+          const dateStr = d.toISOString().split('T')[0];
+
+          for (const task of tasks) {
+            if (!task.days.includes(dayOfWeek)) continue;
+            
+            const [hour, min] = task.time.split(':');
+            const startDate = new Date(dateStr);
+            startDate.setHours(parseInt(hour), parseInt(min), 0);
+            
+            const endDate = new Date(startDate);
+            endDate.setHours(endDate.getHours() + 1);
+
+            events.push({
+              id: task.id + '-' + dateStr,
+              title: task.title,
+              start: startDate,
+              end: endDate,
+              backgroundColor: task.color,
+              borderColor: task.color,
+              extendedProps: { description: task.desc }
+            });
+          }
+        }
+        return events;
+      };
+
+      const calendarEl = document.getElementById('calendar');
+      if (calendarEl && (window as any).FullCalendar) {
+        const calendar = new (window as any).FullCalendar.Calendar(calendarEl, {
+          initialView: 'timeGridWeek',
+          headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          },
+          events: generateEvents(),
+          slotMinTime: '00:00:00',
+          slotMaxTime: '24:00:00',
+          allDaySlot: false,
+          height: 'auto',
+          nowIndicator: true,
+          locale: 'zh-tw',
+          buttonText: {
+            today: '今天',
+            month: '月',
+            week: '週',
+            day: '日'
+          },
+          eventClick: function(info: any) {
+            alert(info.event.title + '\n\n' + info.event.extendedProps.description);
+          }
+        });
+        calendar.render();
+      }
+    };
+
+    // 載入 FullCalendar
+    const loadScript = () => {
+      if (!(window as any).FullCalendar) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js';
+        script.onload = initCalendar;
+        document.head.appendChild(script);
+      } else {
+        initCalendar();
+      }
+    };
+
+    if (document.readyState === 'complete') {
+      loadScript();
+    } else {
+      window.addEventListener('load', loadScript);
+    }
   }, []);
 
   if (!mounted) {
@@ -26,18 +121,20 @@ export default function Home() {
 
   return (
     <>
-      <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-      <style>{`
+      <Head>
+        <title>TT Agent Dashboard</title>
+        <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet" />
+      </Head>
+
+      <style jsx global>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
           --bg-dark: #0f0f1a;
           --bg-panel: #1e1e2e;
-          --bg-card: #2a2a3e;
           --border: #3d3d5c;
           --text: #e0e0e0;
           --text-dim: #a0a0b0;
-          --accent: #6366f1;
         }
         
         body {
@@ -104,6 +201,7 @@ export default function Home() {
           border-radius: 12px;
           overflow: hidden;
           border: 2px solid var(--border);
+          position: relative;
         }
         
         .game-container iframe {
@@ -225,7 +323,7 @@ export default function Home() {
             <span className="status-indicator">🟢 Online</span>
           </div>
           
-          <div className="game-container" style={{ position: "relative" }}>
+          <div className="game-container">
             <iframe 
               src="/game.html"
               style={{ width: "100%", height: "100%", border: "none", background: "#0a0a14" }}
@@ -267,82 +365,6 @@ export default function Home() {
           </div>
         </section>
       </main>
-
-      <script dangerouslySetInnerHTML={{__html: \`
-        // 定期任務
-        const tasks = [
-          { id: 'backup', title: '📦 自動備份', days: [0,1,2,3,4,5,6], time: '03:00', color: '#8b5cf6', desc: '每日備份到 GitHub' },
-          { id: 'health', title: '🏥 網站健康檢查', days: [0,1,2,3,4,5,6], time: '09:00', color: '#22c55e', desc: '檢查網站狀態' },
-          { id: 'gameart', title: '🎨 遊戲美術新聞', days: [0,1,2,3,4,5,6], time: '23:00', color: '#f59e0b', desc: '翻譯發布新聞' },
-          { id: 'youtube', title: '📺 YouTube 檢查', days: [1], time: '10:00', color: '#ef4444', desc: '檢查新影片' },
-          { id: 'earnings', title: '📈 美股財報', days: [5], time: '14:00', color: '#3b82f6', desc: '檢查財報' },
-        ];
-
-        function generateEvents() {
-          const events = [];
-          const now = new Date();
-          const start = new Date(now);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(start);
-          end.setDate(end.getDate() + 14);
-
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dayOfWeek = d.getDay();
-            const dateStr = d.toISOString().split('T')[0];
-
-            for (const task of tasks) {
-              if (!task.days.includes(dayOfWeek)) continue;
-              
-              const [hour, min] = task.time.split(':');
-              const startDate = new Date(dateStr);
-              startDate.setHours(parseInt(hour), parseInt(min), 0);
-              
-              const endDate = new Date(startDate);
-              endDate.setHours(endDate.getHours() + 1);
-
-              events.push({
-                id: task.id + '-' + dateStr,
-                title: task.title,
-                start: startDate,
-                end: endDate,
-                backgroundColor: task.color,
-                borderColor: task.color,
-                extendedProps: { description: task.desc }
-              });
-            }
-          }
-          return events;
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-          const calendarEl = document.getElementById('calendar');
-          const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            headerToolbar: {
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            events: generateEvents(),
-            slotMinTime: '00:00:00',
-            slotMaxTime: '24:00:00',
-            allDaySlot: false,
-            height: 'auto',
-            nowIndicator: true,
-            locale: 'zh-tw',
-            buttonText: {
-              today: '今天',
-              month: '月',
-              week: '週',
-              day: '日'
-            },
-            eventClick: function(info) {
-              alert(info.event.title + '\\n\\n' + info.event.extendedProps.description);
-            }
-          });
-          calendar.render();
-        });
-      \`}} />
     </>
   );
 }
