@@ -78,17 +78,117 @@
     
     .game-container {
       aspect-ratio: 4/3;
-      background: #0a0a14;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       border-radius: 12px;
       overflow: hidden;
       border: 2px solid var(--border);
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     
-    .game-container iframe {
+    .office-scene {
       width: 100%;
       height: 100%;
-      border: none;
+      position: relative;
+      background: 
+        radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+        linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    }
+    
+    .desk {
+      position: absolute;
+      bottom: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 60px;
+      background: linear-gradient(180deg, #8b5a2b 0%, #6b4423 100%);
+      border-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    
+    .desk::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: 10px;
+      right: 10px;
+      height: 10px;
+      background: linear-gradient(180deg, #a0522d 0%, #8b4513 100%);
+      border-radius: 2px;
+    }
+    
+    .computer {
+      position: absolute;
+      bottom: calc(30% + 60px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 40px;
+      background: #2d2d3d;
+      border-radius: 4px;
+      border: 2px solid #4a4a5a;
+    }
+    
+    .computer::before {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 20px;
+      height: 8px;
+      background: #3d3d4d;
+      border-radius: 2px;
+    }
+    
+    .computer::after {
+      content: '';
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 30px;
+      height: 12px;
+      background: #4a4a5a;
+      border-radius: 2px;
+    }
+    
+    .character {
+      position: absolute;
+      bottom: calc(30% + 80px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 48px;
+      height: 96px;
+      image-rendering: pixelated;
+    }
+    
+    .character img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .character-bubble {
+      position: absolute;
+      top: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 10px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .character-bubble.show {
+      opacity: 1;
     }
     
     .status-overlay {
@@ -102,13 +202,21 @@
       align-items: center;
       gap: 8px;
       font-size: 0.75rem;
+      z-index: 10;
     }
     
     .status-dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
+      animation: pulse 2s infinite;
     }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
     .status-dot.idle { background: #888; }
     .status-dot.working { background: #facc15; }
     .status-dot.done { background: #22c55e; }
@@ -157,7 +265,6 @@
       font-size: 1rem;
     }
     
-    /* FullCalendar overrides */
     .fc {
       --fc-border-color: #3d3d5c;
       --fc-button-bg-color: #4a4a6a;
@@ -205,13 +312,18 @@
       </div>
       
       <div class="game-container">
-        <iframe 
-          src="https://shoung.github.io/tt-dashboard/game.html" 
-          title="TT Office Game"
-        ></iframe>
+        <div class="office-scene">
+          <div class="desk"></div>
+          <div class="computer"></div>
+          <div class="character">
+            <div class="character-bubble" id="bubble">📋 任務執行中...</div>
+            <img id="char-img" src="https://raw.githubusercontent.com/geezerrrr/agent-town/main/public/characters/Premade_Character_48x48_02.png" alt="TT" 
+                 onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(180deg, #6366f1, #8b5cf6)';this.parentElement.style.borderRadius='24px 24px 0 0';">
+          </div>
+        </div>
         <div class="status-overlay">
-          <span class="status-dot idle"></span>
-          <span>狀態：Idle (閒置中)</span>
+          <span class="status-dot idle" id="status-dot"></span>
+          <span id="status-text">狀態：Idle (閒置中)</span>
         </div>
       </div>
 
@@ -248,6 +360,33 @@
 
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   <script>
+    // 狀態控制
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const bubble = document.getElementById('bubble');
+    
+    function setStatus(status) {
+      statusDot.className = 'status-dot ' + status;
+      const texts = {
+        idle: 'Idle (閒置中)',
+        working: 'Working (工作中)',
+        done: 'Done (完成)',
+        failed: 'Failed (失敗)'
+      };
+      statusText.textContent = '狀態：' + texts[status];
+      
+      if (status === 'working') {
+        bubble.classList.add('show');
+      } else {
+        bubble.classList.remove('show');
+      }
+    }
+    
+    // 模擬狀態變化（測試用）
+    // setTimeout(() => setStatus('working'), 2000);
+    // setTimeout(() => setStatus('done'), 5000);
+    // setTimeout(() => setStatus('idle'), 7000);
+    
     // 定期任務
     const tasks = [
       { id: 'backup', title: '📦 自動備份', days: [0,1,2,3,4,5,6], time: '03:00', color: '#8b5cf6', desc: '每日備份到 GitHub' },
@@ -257,7 +396,6 @@
       { id: 'earnings', title: '📈 美股財報', days: [5], time: '14:00', color: '#3b82f6', desc: '檢查財報' },
     ];
 
-    // 產生事件
     function generateEvents() {
       const events = [];
       const now = new Date();
@@ -294,7 +432,6 @@
       return events;
     }
 
-    // 初始化日曆
     document.addEventListener('DOMContentLoaded', function() {
       const calendarEl = document.getElementById('calendar');
       const calendar = new FullCalendar.Calendar(calendarEl, {
