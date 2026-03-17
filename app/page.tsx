@@ -126,7 +126,7 @@ export default function Home() {
           
           <div className="game-container">
             <iframe 
-              src="/game.html" 
+              src="https://shoung.github.io/tt-dashboard/game.html" 
               style={{ 
                 width: "100%", 
                 height: "100%", 
