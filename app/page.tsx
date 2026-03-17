@@ -5,26 +5,6 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import dynamic from "next/dynamic";
-
-// 動態加載 Phaser 遊戲
-const PhaserGame = dynamic(() => import("@/components/game/PhaserGame"), {
-  ssr: false,
-  loading: () => (
-    <div style={{ 
-      background: "#0f0f1a", 
-      borderRadius: "8px",
-      width: "100%",
-      height: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      color: "#a0a0b0",
-    }}>
-      Loading game...
-    </div>
-  ),
-});
 
 // 定期任務定義
 interface RecurringTask {
@@ -77,7 +57,6 @@ const RECURRING_TASKS: RecurringTask[] = [
   },
 ];
 
-// 生成每週事件
 function generateWeeklyEvents(startDate: Date, endDate: Date) {
   const events: any[] = [];
   const current = new Date(startDate);
@@ -138,7 +117,7 @@ export default function Home() {
       </header>
 
       <main className="main-content">
-        {/* 左側：像素辦公室 */}
+        {/* 左側：像素辦公室 (使用 iframe) */}
         <section className="left-panel">
           <div className="panel-header">
             <h2>🏢 我的辦公室</h2>
@@ -146,7 +125,16 @@ export default function Home() {
           </div>
           
           <div className="game-container">
-            <PhaserGame />
+            <iframe 
+              src="/game.html" 
+              style={{ 
+                width: "100%", 
+                height: "100%", 
+                border: "none",
+                background: "#0a0a14"
+              }}
+              title="TT Office Game"
+            />
             <div className="status-overlay">
               <span className="status-dot idle"></span>
               <span>狀態：Idle (閒置中)</span>

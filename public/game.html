@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-tw">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TT Office - Phaser Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f0f1a; overflow: hidden; }
+    #game-container { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script>
+    // Game configuration
+    const AGENT_TOWN_BASE = "https://raw.githubusercontent.com/geezerrrr/agent-town/main/public";
+    const TT_SPRITE_KEY = "character_02";
+    const SHEET_COLUMNS = 56;
+    const FRAME_WIDTH = 48;
+    const FRAME_HEIGHT = 96;
+    const MOVE_SPEED = 160;
+
+    // Constants
+    const BODY_WIDTH = 28;
+    const BODY_HEIGHT = 20;
+    const BODY_OFFSET_X = 10;
+    const BODY_OFFSET_Y = 74;
+
+    const directions = ["right", "up", "left", "down"];
+    const FRAMES_PER_DIR = 6;
+
+    class OfficeScene extends Phaser.Scene {
+      constructor() {
+        super({ key: "OfficeScene" });
+        this.tt = null;
+      }
+
+      preload() {
+        this.load.tilemapTiledJSON("office", "/maps/office2.json");
+        
+        this.load.once("filecomplete-tilemapJSON-office", () => {
+          const cached = this.cache.tilemap.get("office");
+          if (!cached?.data?.tilesets) return;
+          for (const ts of cached.data.tilesets) {
+            const basename = ts.image.split("/").pop();
+            this.load.image(ts.name, AGENT_TOWN_BASE + "/tilesets/" + basename);
+          }
+        });
+
+        this.load.spritesheet(
+          TT_SPRITE_KEY,
+          AGENT_TOWN_BASE + "/characters/Premade_Character_48x48_02.png",
+          { frameWidth: FRAME_WIDTH, frameHeight: FRAME_HEIGHT }
+        );
+      }
+
+      create() {
+        const map = this.make.tilemap({ key: "office" });
+        
+        const allTilesets = [];
+        for (const ts of map.tilesets) {
+          const added = map.addTilesetImage(ts.name, ts.name);
+          if (added) allTilesets.push(added);
+        }
+
+        if (allTilesets.length === 0) {
+          console.error("No tilesets loaded");
+          return;
+        }
+
+        map.createLayer("floor", allTilesets);
+        map.createLayer("walls", allTilesets);
+        map.createLayer("ground", allTilesets);
+        map.createLayer("furniture", allTilesets);
+        map.createLayer("objects", allTilesets);
+        map.createLayer("props", allTilesets);
+        map.createLayer("props-over", allTilesets);
+        
+        const overheadLayer = map.createLayer("overhead", allTilesets);
+        if (overheadLayer) overheadLayer.setDepth(10);
+
+        // Create TT character
+        this.tt = this.createWorker(this, 350, 320, TT_SPRITE_KEY);
+
+        // Camera
+        this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+        this.cameras.main.startFollow(this.tt.sprite, true, 0.08, 0.08);
+        this.cameras.main.setZoom(1.2);
+
+        // Expose for external control
+        window.ttWorker = this.tt;
+      }
+
+      update() {
+        if (this.tt) {
+          this.tt.update();
+        }
+      }
+
+      createWorker(scene, x, y, spriteKey) {
+        // Create animations
+        this.ensureAnims(scene, spriteKey);
+
+        const sprite = scene.physics.add.sprite(x, y, spriteKey, 0);
+        sprite.setDepth(5);
+        const body = sprite.body;
+        body.setSize(BODY_WIDTH, BODY_HEIGHT);
+        body.setOffset(BODY_OFFSET_X, BODY_OFFSET_Y);
+        body.allowGravity = false;
+        body.pushable = false;
+        body.mass = 999;
+
+        sprite.anims.play(spriteKey + ":idle-down");
+
+        // Name tag
+        const nameTag = scene.add.text(x, y + FRAME_HEIGHT/2 + 2, "TT", {
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: "8px",
+          color: "#e0e0e0",
+          backgroundColor: "rgba(0,0,0,0.7)",
+          padding: { x: 4, y: 2 }
+        }).setOrigin(0.5, 0).setDepth(20);
+
+        // Status dot
+        const statusDot = scene.add.graphics().setDepth(20);
+
+        // Bubble
+        const bubbleBg = scene.add.graphics();
+        const bubbleText = scene.add.text(0, 0, "", {
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: "8px",
+          color: "#ffffff",
+          wordWrap: { width: 150 }
+        }).setOrigin(0.5);
+        const bubble = scene.add.container(0, 0, [bubbleBg, bubbleText]).setDepth(21).setVisible(false);
+
+        const worker = {
+          sprite, scene, spriteKey, homeX: x, homeY: y,
+          facing: "down", moveTarget: null, _status: "idle",
+          
+          get status() { return this._status; },
+          
+          setStatus(status) {
+            this._status = status;
+            this.updateStatusDot();
+          },
+          
+          updateStatusDot() {
+            statusDot.clear();
+            const colors = { idle: 0x888888, working: 0xfacc15, done: 0x22c55e, failed: 0xef4444 };
+            const nameY = this.sprite.y + FRAME_HEIGHT/2 + 2;
+            const dotX = this.sprite.x - nameTag.width/2 - 6;
+            statusDot.fillStyle(colors[this._status], 1);
+            statusDot.fillCircle(dotX, nameY + 4, 4);
+          },
+          
+          showBubble(text, ttl) {
+            bubbleText.setText(text);
+            bubbleText.setPosition(0, 0);
+            const padding = 8;
+            const w = bubbleText.width + padding * 2;
+            const h = bubbleText.height + padding * 2;
+            bubbleBg.clear();
+            bubbleBg.fillStyle(0x000000, 0.8);
+            bubbleBg.fillRoundedRect(-w/2, -h/2, w, h, 8);
+            bubble.setPosition(this.sprite.x, this.sprite.y - FRAME_HEIGHT * 0.55);
+            bubble.setVisible(true);
+            scene.time.delayedCall(ttl, () => bubble.setVisible(false));
+          },
+          
+          assignTask(id, message) {
+            this.setStatus("working");
+            this.showBubble("📋 " + message, 4000);
+          },
+          
+          completeTask() {
+            this.setStatus("done");
+            scene.time.delayedCall(2000, () => this.setStatus("idle"));
+          },
+          
+          update() {
+            // Movement
+            if (this.moveTarget) {
+              const dx = this.moveTarget.x - this.sprite.x;
+              const dy = this.moveTarget.y - this.sprite.y;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              
+              if (dist < 5) {
+                this.moveTarget = null;
+                this.sprite.setVelocity(0, 0);
+                this.sprite.anims.play(this.spriteKey + ":idle-" + this.facing);
+                return;
+              }
+              
+              if (Math.abs(dx) > Math.abs(dy)) {
+                this.facing = dx > 0 ? "right" : "left";
+              } else {
+                this.facing = dy > 0 ? "down" : "up";
+              }
+              
+              this.sprite.setVelocity((dx/dist)*MOVE_SPEED, (dy/dist)*MOVE_SPEED);
+              this.sprite.anims.play(this.spriteKey + ":walk-" + this.facing);
+            }
+            
+            // Update UI positions
+            nameTag.setPosition(this.sprite.x, this.sprite.y + FRAME_HEIGHT/2 + 2);
+            this.updateStatusDot();
+            if (bubble.visible) {
+              bubble.setPosition(this.sprite.x, this.sprite.y - FRAME_HEIGHT * 0.55);
+            }
+          }
+        };
+        
+        return worker;
+      }
+      
+      ensureAnims(scene, spriteKey) {
+        if (scene.anims.exists(spriteKey + ":idle-down")) return;
+        
+        for (const prefix of ["idle", "walk"]) {
+          const row = prefix === "idle" ? 1 : 2;
+          const frameRate = prefix === "idle" ? 8 : 10;
+          directions.forEach((dir, i) => {
+            const frames = [];
+            for (let f = 0; f < FRAMES_PER_DIR; f++) {
+              frames.push({ key: spriteKey, frame: row * SHEET_COLUMNS + i * FRAMES_PER_DIR + f });
+            }
+            scene.anims.create({
+              key: spriteKey + ":" + prefix + "-" + dir,
+              frames, frameRate, repeat: -1
+            });
+          });
+        }
+      }
+    }
+
+    const config = {
+      type: Phaser.AUTO,
+      parent: "game-container",
+      width: window.innerWidth,
+      height: window.innerHeight,
+      backgroundColor: "#1a1a2e",
+      scene: [OfficeScene],
+      physics: { default: "arcade", arcade: { gravity: { x: 0, y: 0 }, debug: false } },
+      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }
+    };
+
+    new Phaser.Game(config);
+  </script>
+</body>
+</html>
