@@ -2,6 +2,9 @@ import * as Phaser from "phaser";
 import { TTWorker } from "../entities/TTWorker";
 import { TT_SPRITE_KEY, TT_SPRITE_PATH } from "../config/animations";
 
+// 使用 agent-town 的原始 GitHub URL
+const AGENT_TOWN_BASE = "https://raw.githubusercontent.com/geezerrrr/agent-town/main/public";
+
 export class OfficeScene extends Phaser.Scene {
   private tt!: TTWorker;
 
@@ -18,12 +21,13 @@ export class OfficeScene extends Phaser.Scene {
       if (!cached?.data?.tilesets) return;
       for (const ts of cached.data.tilesets) {
         const basename = (ts.image as string).split("/").pop()!;
-        this.load.image(ts.name, `/tilesets/${basename}`);
+        // 從 GitHub 加載 tileset 圖片
+        this.load.image(ts.name, `${AGENT_TOWN_BASE}/tilesets/${basename}`);
       }
     });
 
-    // Load character sprite
-    this.load.image(TT_SPRITE_KEY, TT_SPRITE_PATH);
+    // Load character sprite from GitHub
+    this.load.image(TT_SPRITE_KEY, `${AGENT_TOWN_BASE}${TT_SPRITE_PATH}`);
   }
 
   create() {
