@@ -7,12 +7,9 @@ import { OfficeScene } from "./scenes/OfficeScene";
 export default function PhaserGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [gameReady, setGameReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Prevent double initialization
     if (gameRef.current) return;
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -36,10 +33,6 @@ export default function PhaserGame() {
     };
 
     gameRef.current = new Phaser.Game(config);
-    
-    gameRef.current.events.once("ready", () => {
-      setGameReady(true);
-    });
 
     return () => {
       if (gameRef.current) {
@@ -50,26 +43,15 @@ export default function PhaserGame() {
   }, []);
 
   return (
-    <div className="pixel-office">
-      <div 
-        ref={containerRef} 
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      />
-      <style jsx>{`
-        .pixel-office {
-          width: 100%;
-          height: 100%;
-          background: #0f0f1a;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-      `}</style>
-    </div>
+    <div 
+      ref={containerRef} 
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    />
   );
 }

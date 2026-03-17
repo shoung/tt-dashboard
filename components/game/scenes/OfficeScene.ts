@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import { TTWorker } from "../entities/TTWorker";
-import { TT_SPRITE_KEY, TT_SPRITE_PATH } from "../config/animations";
+import { TT_SPRITE_KEY } from "../config/animations";
 
 // 使用 agent-town 的原始 GitHub URL
 const AGENT_TOWN_BASE = "https://raw.githubusercontent.com/geezerrrr/agent-town/main/public";
@@ -13,7 +13,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   preload() {
-    // Load tilemap
+    // 從 GitHub 加載地圖
     this.load.tilemapTiledJSON("office", "/maps/office2.json");
 
     this.load.once("filecomplete-tilemapJSON-office", () => {
@@ -21,30 +21,20 @@ export class OfficeScene extends Phaser.Scene {
       if (!cached?.data?.tilesets) return;
       for (const ts of cached.data.tilesets) {
         const basename = (ts.image as string).split("/").pop()!;
-        // 從 GitHub 加載 tileset 圖片
         this.load.image(ts.name, `${AGENT_TOWN_BASE}/tilesets/${basename}`);
       }
     });
 
-    // Load character sprite from GitHub
-    this.load.image(TT_SPRITE_KEY, `${AGENT_TOWN_BASE}${TT_SPRITE_PATH}`);
+    // 從 GitHub 加載角色精靈圖
+    this.load.spritesheet(
+      TT_SPRITE_KEY,
+      `${AGENT_TOWN_BASE}/characters/Premade_Character_48x48_02.png`,
+      { frameWidth: 48, frameHeight: 96 }
+    );
   }
 
   create() {
-    // Build sprite frames for character
-    const sheetColumns = 56;
-    const frameWidth = 48;
-    const frameHeight = 96;
-
-    // Generate all frames
-    for (let row = 1; row <= 2; row++) {
-      for (let col = 0; col < sheetColumns; col++) {
-        const frame = row * sheetColumns + col;
-        // Just preload the texture region
-      }
-    }
-
-    // Create tilemap
+    // 建立地圖
     const map = this.make.tilemap({ key: "office" });
 
     const allTilesets: Phaser.Tilemaps.Tileset[] = [];
@@ -58,28 +48,27 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
 
-    // Create layers
-    map.createLayer("floor", allTilesets);
-    map.createLayer("walls", allTilesets);
-    map.createLayer("ground", allTilesets);
-    map.createLayer("furniture", allTilesets);
-    map.createLayer("objects", allTilesets);
-    map.createLayer("props", allTilesets);
-    map.createLayer("props-over", allTilesets);
-
+    // 建立多個圖層
+    const floorLayer = map.createLayer("floor", allTilesets);
+    const wallsLayer = map.createLayer("walls", allTilesets);
+    const groundLayer = map.createLayer("ground", allTilesets);
+    const furnitureLayer = map.createLayer("furniture", allTilesets);
+    const objectsLayer = map.createLayer("objects", allTilesets);
+    const propsLayer = map.createLayer("props", allTilesets);
+    const propsOverLayer = map.createLayer("props-over", allTilesets);
     const overheadLayer = map.createLayer("overhead", allTilesets);
+
     if (overheadLayer) overheadLayer.setDepth(10);
 
-    // Create TT worker at a desk position
-    // Based on office2.json, let's pick a reasonable position
-    this.tt = new TTWorker(this, 300, 280, TT_SPRITE_KEY);
+    // 創建 TT 角色在座位上
+    this.tt = new TTWorker(this, 350, 320, TT_SPRITE_KEY);
 
-    // Make camera follow TT
+    // 攝影機跟隨 TT
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.cameras.main.startFollow(this.tt.sprite, true, 0.08, 0.08);
-    this.cameras.main.setZoom(1.5);
+    this.cameras.main.setZoom(1.2);
 
-    // Expose TT worker for external control
+    // 暴露 TT worker 供外部控制
     (window as any).ttWorker = this.tt;
   }
 

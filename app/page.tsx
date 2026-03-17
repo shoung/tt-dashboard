@@ -5,21 +5,129 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import dynamic from "next/dynamic";
 
-// 假數據 - 測試用
-const FAKE_EVENTS = [
-  { id: "1", title: "📦 自動備份", start: "2026-03-18T03:00:00", end: "2026-03-18T03:30:00", backgroundColor: "#8b5cf6", borderColor: "#8b5cf6", extendedProps: { description: "每日備份到 GitHub" } },
-  { id: "2", title: "🏥 網站健康檢查", start: "2026-03-18T09:00:00", end: "2026-03-18T09:30:00", backgroundColor: "#22c55e", borderColor: "#22c55e", extendedProps: { description: "檢查網站狀態" } },
-  { id: "3", title: "🎨 遊戲美術新聞", start: "2026-03-18T23:00:00", end: "2026-03-18T23:30:00", backgroundColor: "#f59e0b", borderColor: "#f59e0b", extendedProps: { description: "翻譯發布新聞" } },
-  { id: "4", title: "📺 YouTube 檢查", start: "2026-03-23T10:00:00", end: "2026-03-23T10:30:00", backgroundColor: "#ef4444", borderColor: "#ef4444", extendedProps: { description: "檢查新影片" } },
-  { id: "5", title: "📈 美股財報", start: "2026-03-20T14:00:00", end: "2026-03-20T14:30:00", backgroundColor: "#3b82f6", borderColor: "#3b82f6", extendedProps: { description: "檢查財報" } },
+// 動態加載 Phaser 遊戲
+const PhaserGame = dynamic(() => import("@/components/game/PhaserGame"), {
+  ssr: false,
+  loading: () => (
+    <div style={{ 
+      background: "#0f0f1a", 
+      borderRadius: "8px",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#a0a0b0",
+    }}>
+      Loading game...
+    </div>
+  ),
+});
+
+// 定期任務定義
+interface RecurringTask {
+  id: string;
+  title: string;
+  description: string;
+  dayOfWeek?: number[];
+  time: string;
+  color: string;
+}
+
+const RECURRING_TASKS: RecurringTask[] = [
+  {
+    id: "daily-backup",
+    title: "📦 自動備份",
+    description: "每日凌晨 03:00 自動備份到 GitHub 私人倉庫\n\n包含：SOUL.md、MEMORY.md、skills/、memory/、plugins/",
+    time: "03:00",
+    color: "#8b5cf6",
+  },
+  {
+    id: "daily-healthcheck",
+    title: "🏥 網站健康檢查",
+    description: "每日檢查網站運行狀態",
+    time: "09:00",
+    color: "#22c55e",
+  },
+  {
+    id: "daily-gameart",
+    title: "🎨 遊戲美術新聞",
+    description: "每日 23:00 收集遊戲美術外包產業新聞\n\n來源：x.com、Reddit、5ch.io\n翻譯成簡體中文後發布到 GitHub",
+    dayOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    time: "23:00",
+    color: "#f59e0b",
+  },
+  {
+    id: "weekly-youtube",
+    title: "📺 GenAI4Humanities 檢查",
+    description: "每週檢查 GenAI4Humanities YouTube 頻道是否有新影片",
+    dayOfWeek: [1],
+    time: "10:00",
+    color: "#ef4444",
+  },
+  {
+    id: "weekly-earnings",
+    title: "📈 美股財報檢查",
+    description: "每週檢查美股持股的財報發布情況\n\n檢查範圍：75 檔股票",
+    dayOfWeek: [5],
+    time: "14:00",
+    color: "#3b82f6",
+  },
 ];
 
+// 生成每週事件
+function generateWeeklyEvents(startDate: Date, endDate: Date) {
+  const events: any[] = [];
+  const current = new Date(startDate);
+
+  while (current <= endDate) {
+    const dayOfWeek = current.getDay();
+    const dateStr = current.toISOString().split("T")[0];
+
+    for (const task of RECURRING_TASKS) {
+      if (task.dayOfWeek && !task.dayOfWeek.includes(dayOfWeek)) {
+        continue;
+      }
+
+      events.push({
+        id: `${task.id}-${dateStr}`,
+        title: task.title,
+        start: `${dateStr}T${task.time}:00`,
+        end: `${dateStr}T${parseInt(task.time.split(":")[0]) + 1}:${task.time.split(":")[1]}:00`,
+        backgroundColor: task.color,
+        borderColor: task.color,
+        extendedProps: {
+          description: task.description,
+          taskId: task.id,
+        },
+      });
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return events;
+}
+
 export default function Home() {
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<RecurringTask | null>(null);
+
+  useEffect(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 14);
+    setEvents(generateWeeklyEvents(start, end));
+  }, []);
 
   const handleEventClick = (info: any) => {
-    setSelectedEvent(info.event.extendedProps);
+    const task = RECURRING_TASKS.find((t) => t.id === info.event.extendedProps.taskId);
+    if (task) {
+      setSelectedEvent(task);
+    }
   };
 
   return (
@@ -38,12 +146,7 @@ export default function Home() {
           </div>
           
           <div className="game-container">
-            {/* 暫時用靜態圖片 */}
-            <img 
-              src="https://raw.githubusercontent.com/geezerrrr/agent-town/main/public/characters/Premade_Character_48x48_02.png" 
-              alt="TT Pixel Character"
-              style={{ width: "100%", height: "100%", objectFit: "contain", imageRendering: "pixelated" }}
-            />
+            <PhaserGame />
             <div className="status-overlay">
               <span className="status-dot idle"></span>
               <span>狀態：Idle (閒置中)</span>
@@ -85,7 +188,7 @@ export default function Home() {
                 center: "title",
                 right: "dayGridMonth,timeGridWeek,timeGridDay",
               }}
-              events={FAKE_EVENTS}
+              events={events}
               eventClick={handleEventClick}
               slotMinTime="00:00:00"
               slotMaxTime="24:00:00"
@@ -103,16 +206,25 @@ export default function Home() {
               }}
             />
 
-            {/* 任務說明彈窗 */}
             {selectedEvent && (
               <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
                 <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                  <div className="modal-header">
-                    <h3>{selectedEvent.title || "任務詳情"}</h3>
+                  <div className="modal-header" style={{ borderLeft: `4px solid ${selectedEvent.color}` }}>
+                    <h3>{selectedEvent.title}</h3>
                     <button className="close-btn" onClick={() => setSelectedEvent(null)}>×</button>
                   </div>
                   <div className="modal-body">
-                    <pre>{selectedEvent.description}</pre>
+                    <p><strong>執行時間：</strong> {selectedEvent.time}</p>
+                    {selectedEvent.dayOfWeek && (
+                      <p><strong>執行日期：</strong> 每週 {
+                        selectedEvent.dayOfWeek.map(d => ["日", "一", "二", "三", "四", "五", "六"][d]).join("、")
+                      }</p>
+                    )}
+                    <hr />
+                    <div className="description">
+                      <strong>任務說明：</strong>
+                      <pre>{selectedEvent.description}</pre>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -145,7 +257,6 @@ export default function Home() {
           font-size: 0.875rem;
         }
 
-        /* 左右分屏 */
         .main-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -248,7 +359,6 @@ export default function Home() {
           overflow: auto;
         }
 
-        /* FullCalendar 樣式 */
         :global(.fc) {
           --fc-border-color: #3d3d5c;
           --fc-button-bg-color: #4a4a6a;
@@ -280,7 +390,6 @@ export default function Home() {
           font-size: 1rem;
         }
 
-        /* 彈窗 */
         .modal-overlay {
           position: fixed;
           top: 0;
@@ -329,7 +438,17 @@ export default function Home() {
           color: #c0c0d0;
         }
 
-        .modal-body pre {
+        .modal-body p {
+          margin: 8px 0;
+        }
+
+        .modal-body hr {
+          border: none;
+          border-top: 1px solid #3d3d5c;
+          margin: 16px 0;
+        }
+
+        .description pre {
           background: #1e1e2e;
           padding: 12px;
           border-radius: 8px;
